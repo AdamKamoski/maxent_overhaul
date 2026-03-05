@@ -1,0 +1,17 @@
+# Modernized dependency set for running 2019 MAXENT code on current Python stacks.
+# Install with: pip install -r requirements-modern.txt
+
+numpy<2
+scipy
+matplotlib
+tabulate
+cvxpy
+torch
+tensorflow==2.15.1
+gym==0.26.2
+gymnasium[mujoco]
+mujoco
+imageio
+imageio-ffmpeg
+moviepy
+git+https://github.com/openai/spinningup.git
