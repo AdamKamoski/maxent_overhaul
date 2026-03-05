@@ -2,22 +2,20 @@
 
 import sys
 import os
-sys.path.append(os.getenv("HOME") + '/maxent')
-sys.path.append(os.getenv("HOME") + '/spinningup')
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-import os
+from maxent_compat import make_env, monitor_env, raw_obs_from_state, resolve_env_id
+
+
 import time
 import random
 
 import numpy as np
 import scipy.stats
 from scipy.interpolate import interp2d
-from scipy.interpolate import spline
 from tabulate import tabulate
 
 import gym
-from gym import wrappers
-import tensorflow as tf
 
 # local imports
 import utils
@@ -78,8 +76,8 @@ def execute_one_rollout(policies, weights, env, obs, T, data, video_dir='', wrap
             if wrapped:
                 print(t)
                 env.close()
-                base_env = gym.make('Humanoid-v2')
-                env = wrappers.Monitor(base_env, video_dir+'/%d' % uid)
+                base_env = make_env(resolve_env_id('Humanoid-v2'))
+                env = monitor_env(base_env, video_dir+'/%d' % uid)
                 env.reset()
                 uid = uid + 1
                 qpos = obs[:len(humanoid_utils.qpos)]
@@ -109,23 +107,23 @@ def execute_average_policy(env, policies, T, weights=[], initial_state=[], n=10,
         
         if len(initial_state) == 0:
             env.reset()
-            initial_state = env.env.state_vector()
+            initial_state = env.unwrapped.state_vector()
                  
         # only get a recording of first iteration
         if render and iteration == 0:
             print('recording mixed iteration....')
-            wrapped_env = wrappers.Monitor(env, video_dir+'/%d' % 0)
+            wrapped_env = monitor_env(env, video_dir+'/%d' % 0)
             wrapped_env.reset()
             qpos = initial_state[:len(humanoid_utils.qpos)]
             qvel = initial_state[len(humanoid_utils.qpos):]
             wrapped_env.unwrapped.set_state(qpos, qvel)
             obs = humanoid_utils.get_state(wrapped_env, \
-                                           wrapped_env.unwrapped._get_obs(), wrapped=True)
+                                           raw_obs_from_state(wrapped_env), wrapped=True)
             data = execute_one_rollout(policies, weights, wrapped_env, obs, \
                                        T=args.record_steps, data=data, \
                                        video_dir=video_dir, wrapped=True)
         else:
-            obs = humanoid_utils.get_state(env, env.env._get_obs())
+            obs = humanoid_utils.get_state(env, raw_obs_from_state(env))
             data = execute_one_rollout(policies, weights, env, obs, T, data)
             
     env.close()
@@ -164,8 +162,11 @@ def collect_entropy_policies(env, epochs, T, MODEL_DIR=''):
         f = open(experiment_directory+'/args', 'w')
         f.write(' '.join(sys.argv))
         f.flush()
-    
-    indexes = [1,5,10,15]
+
+    base_indexes = [1,5,10,15]
+    indexes = [idx for idx in base_indexes if idx < epochs]
+    if len(indexes) == 0 and epochs > 0:
+        indexes = [epochs - 1]
 
     running_avg_p_xy = np.zeros(shape=(tuple(humanoid_utils.num_states_2d)))
     running_avg_ent_xy = 0
@@ -214,7 +215,7 @@ def collect_entropy_policies(env, epochs, T, MODEL_DIR=''):
         else:
             seed = random.randint(1, 100000)
         
-        sac = HumanoidSoftActorCritic(lambda : gym.make(args.env), reward_fn=reward_fn, xid=i+1,
+        sac = HumanoidSoftActorCritic(lambda : make_env(resolve_env_id(args.env)), reward_fn=reward_fn, xid=i+1,
             seed=seed, gamma=args.gamma, max_ep_len=1000,
             ac_kwargs=dict(hidden_sizes=[args.hid]*args.l),
             logger_kwargs=logger_kwargs)
@@ -293,7 +294,10 @@ def collect_entropy_policies(env, epochs, T, MODEL_DIR=''):
         # compute rewards
         # update reward function
         print("Update reward function")
-        reward_fn = RewardFn(data, n_components=32, eps=.001)
+        n_components = min(32, len(data))
+        if n_components < 1:
+            n_components = 1
+        reward_fn = RewardFn(data, n_components=n_components, eps=.001)
         reward_fn.test(test_data, env)
 
         # (save for plotting)
@@ -332,7 +336,7 @@ def collect_entropy_policies(env, epochs, T, MODEL_DIR=''):
                 running_avg_ent_xy, 
                 entropy_of_running_avg_p_baseline]
         table = tabulate(np.transpose([col1, col2, col3]), 
-            col_headers, tablefmt="fancy_grid", floatfmt=".4f")
+            col_headers, tablefmt="grid", floatfmt=".4f")
         utils.log_statement(table)
         
         # Plot from round.
@@ -360,7 +364,7 @@ def main():
     np.set_printoptions(suppress=True, edgeitems=100, linewidth=150, precision=8)
 
     # Make environment.
-    env = gym.make(args.env)
+    env = make_env(resolve_env_id(args.env))
     env.seed(int(time.time())) # seed environment
 
     plotting.FIG_DIR = 'figs/'
@@ -376,5 +380,20 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
