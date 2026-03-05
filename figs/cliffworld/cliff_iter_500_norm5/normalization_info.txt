@@ -1,0 +1,1 @@
+reachable_states=37\ntheoretical_max_entropy_raw=3.6109179126442243\ntarget_max_entropy=5.0\nnormalization_factor=1.3846894670442869\nuniform_policy_entropy_raw=2.7064865767156117\nuniform_policy_entropy_normalized=3.7476434554748566\n
